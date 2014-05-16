@@ -1,0 +1,18 @@
+{
+	"name": "duml",
+	"description": "Creates Plantuml descriptor files from D classes",
+	"copyright": "Copyright © 2014, Richard Andrew Cattermole",
+	"authors": ["Richard Andrew Cattermole"],
+	"versions": [],
+	"mainSourceFile": "source/duml/main.d",
+	"configurations": [
+		{
+			"name": "library",
+			"targetType": "library"
+		},
+		{
+			"name": "test",
+			"targetType": "executable"
+		}
+	]
+}
