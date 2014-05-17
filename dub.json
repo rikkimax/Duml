@@ -5,6 +5,7 @@
 	"authors": ["Richard Andrew Cattermole"],
 	"versions": [],
 	"mainSourceFile": "source/duml/main.d",
+	"license": "MIT",
 	"configurations": [
 		{
 			"name": "library",
