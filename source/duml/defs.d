@@ -74,7 +74,9 @@ namespace " ~ v.name.ofModule ~ " {
 	"  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
 		}
 		
-		ret ~= "\n}\n";
+		if (ret[$-1] != '\n')
+			ret ~= "\n";
+		ret ~= "}\n";
 	}
 	
 	ret ~= "\n@enduml\n";	
