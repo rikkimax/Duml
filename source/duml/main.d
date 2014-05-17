@@ -47,7 +47,7 @@ class T4 {
 }
 
 class T5_1 {
-	
+	void* x;
 }
 
 class T5 {

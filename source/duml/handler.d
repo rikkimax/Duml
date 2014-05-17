@@ -1,6 +1,6 @@
 ﻿module duml.handler;
 import duml.defs;
-import std.traits : moduleName, BaseTypeTuple, isAbstractClass, FieldTypeTuple, isSomeFunction, ReturnType, isBasicType, isArray, isAssociativeArray, ParameterIdentifierTuple, ParameterTypeTuple, fullyQualifiedName, KeyType, ValueType;
+import std.traits : moduleName, BaseTypeTuple, isAbstractClass, FieldTypeTuple, isSomeFunction, ReturnType, isBasicType, isArray, isAssociativeArray, ParameterIdentifierTuple, ParameterTypeTuple, fullyQualifiedName, KeyType, ValueType, PointerTarget, isPointer;
 
 pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface)) {
 	DumlConstruct ret;
@@ -37,6 +37,11 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 					method.arguments ~= grabField!(v, T, names[i])(ret);
 				}
 				
+				static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
+					method.returnType = DumlConstructName("", "void", "void");
+				} else {
+					method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
+				}
 				ret.methods ~= method;
 			}
 		}
@@ -55,42 +60,65 @@ pure bool implementedName(T, string n)() {
 	return false;
 }
 
-pure DumlConstructField grabField(T, U, string m, T t = T.init)(ref DumlConstruct data) {
+pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlConstruct data) {
 	DumlConstructField ret;
 	static if (T.stringof != typeof(null).stringof) {
-		static if (isBasicType!(T)) {
-			ret = DumlConstructField(m, DumlConstructName("", T.stringof, fullyQualifiedName!T));
-			
-			if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface))
-				static if (!is(U == T))
-					data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-		} else static if (isArray!(T)) {
-			foreach(e; [t.init]) {
-				ret = DumlConstructField(m, DumlConstructName("", typeof(e).stringof, fullyQualifiedName!(typeof(e))));
-			}
-			
-			if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface) || is(T == interface))
-				static if (!is(U == T))
-					data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-		} else static if (isAssociativeArray!(T)) {
-			DumlConstructField key, value;
-			key = grabField!(KeyType!T, U, "")(data);
-			value = grabField!(ValueType!T, U, "")(data);
-			
-			ret = DumlConstructField(m, DumlConstructName(value.type.ofModule, T.stringof, value.type.fullyQuallified ~ "[" ~ key.type.fullyQuallified ~ "]"));
-			
-			if (is(KeyType!T == class) || is(KeyType!T == struct) || is(KeyType!T == union) || is(KeyType!T == interface))
-				static if (!is(U == KeyType!T))
-					data.referencedClasses[key.type.fullyQuallified] = key.type;
-			if (is(ValueType!T == class) || is(ValueType!T == struct) || is(ValueType!T == union) || is(ValueType!T == interface))
-				static if (!is(U == ValueType!T))
-					data.referencedClasses[value.type.fullyQuallified] = value.type;
+		static if (is(T == void)) {
+			ret = DumlConstructField(m, DumlConstructName("", "void" ~ (isPtr ? "*" : ""), "void" ~ (isPtr ? "*" : "")));
 		} else {
-			ret = DumlConstructField(m, DumlConstructName(moduleName!(T), T.stringof, fullyQualifiedName!T));
+			T t = T.init;
 			
-			if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface))
-				static if (!is(U == T))
-					data.referencedClasses[ret.type.fullyQuallified] = ret.type;
+			static if (isPointer!T) {
+				ret = grabField!(PointerTarget!T, U, m, true)(data);
+			} else static if (isBasicType!(T)) {
+				ret = DumlConstructField(m, DumlConstructName("", T.stringof ~ (isPtr ? "*" : ""), fullyQualifiedName!T ~ (isPtr ? "*" : "")));
+				
+				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
+					static if (!is(U == T)) {
+						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
+						data.callerClasses ~= &registerType!U;
+					}
+				}
+			} else static if (isArray!(T)) {
+				foreach(e; [t.init]) {
+					ret = DumlConstructField(m, DumlConstructName("", typeof(e).stringof ~ (isPtr ? "*" : ""), fullyQualifiedName!(typeof(e)) ~ (isPtr ? "*" : "")));
+				}
+				
+				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface) || is(T == interface)) {
+					static if (!is(U == T)) {
+						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
+						data.callerClasses ~= &registerType!U;
+					}
+				}
+			} else static if (isAssociativeArray!(T)) {
+				DumlConstructField key, value;
+				key = grabField!(KeyType!T, U, "")(data);
+				value = grabField!(ValueType!T, U, "")(data);
+				
+				ret = DumlConstructField(m, DumlConstructName(value.type.ofModule, T.stringof ~ (isPtr ? "*" : ""), value.type.fullyQuallified ~ "[" ~ key.type.fullyQuallified ~ "]" ~ (isPtr ? "*" : "")));
+				
+				if (is(KeyType!T == class) || is(KeyType!T == struct) || is(KeyType!T == union) || is(KeyType!T == interface)) {
+					static if (!is(U == KeyType!T)) {
+						data.referencedClasses[key.type.fullyQuallified] = key.type;
+						data.callerClasses ~= &registerType!(KeyType!T);
+					}
+				}
+				if (is(ValueType!T == class) || is(ValueType!T == struct) || is(ValueType!T == union) || is(ValueType!T == interface)) {
+					static if (!is(U == ValueType!T)) {
+						data.referencedClasses[value.type.fullyQuallified] = value.type;
+						data.callerClasses ~= &registerType!(ValueType!T);
+					}
+				}
+			} else {
+				ret = DumlConstructField(m, DumlConstructName(moduleName!(T), T.stringof, fullyQualifiedName!T));
+				
+				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
+					static if (!is(U == T)) {
+						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
+						data.callerClasses ~= &registerType!U;
+					}
+				}
+			}
 		}
 	}
 	return ret;

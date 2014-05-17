@@ -20,6 +20,9 @@ void registerType(T...)() {
 						registerType!V;
 					}
 				}
+				foreach(func; definitions[fullyQualifiedName!U].callerClasses) {
+					func();
+				}
 			}
 		}
 	}
@@ -102,6 +105,8 @@ struct DumlConstruct {
 	DumlConstructField[] fields;
 	DumlConstructMethod[] methods;
 	DumlConstructName[string] referencedClasses;
+	
+	void function()[] callerClasses;
 }
 
 struct DumlConstructName {
