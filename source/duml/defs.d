@@ -36,6 +36,7 @@ string outputPlantUML() {
 		ret ~= """
 namespace " ~ v.name.ofModule ~ " {
 	class " ~ v.name.ofClass ~ " {";
+		
 		foreach(field; v.fields) {
 			ret ~= """
 	    " ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified);
@@ -45,9 +46,10 @@ namespace " ~ v.name.ofModule ~ " {
 			ret ~= """
 	    " ~ method.name ~ "(";
 			
-			foreach(arg; method.arguments) {
-				ret ~= arg.name ~ " : " ~ (v.name.ofModule == arg.type.ofModule ? arg.type.ofClass : arg.type.fullyQuallified) ~ ", ";
+			foreach(i, arg; method.arguments) {
+				ret ~= method.argStorageClasses[i] ~ arg.name ~ " : " ~ (v.name.ofModule == arg.type.ofModule ? arg.type.ofClass : arg.type.fullyQuallified) ~ ", ";
 			}
+			
 			if (method.arguments.length > 0)
 				ret.length -= 2;
 			
@@ -57,10 +59,10 @@ namespace " ~ v.name.ofModule ~ " {
 		ret ~= """
 	}
 """;
+		
 		foreach(refc; v.referencedClasses) {
 			ret ~= "\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
 		}
-		
 		
 		if (v.extends.ofClass != "") {
 			ret ~= "\n    " ~ v.name.fullyQuallified ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n";
@@ -69,6 +71,7 @@ namespace " ~ v.name.ofModule ~ " {
 				ret ~= "    " ~ (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object";
 			}
 		}
+		
 		foreach(i; v.inheritsFrom) {
 			ret ~= """
 	"  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
@@ -76,6 +79,7 @@ namespace " ~ v.name.ofModule ~ " {
 		
 		if (ret[$-1] != '\n')
 			ret ~= "\n";
+		
 		ret ~= "}\n";
 	}
 	
@@ -126,4 +130,5 @@ struct DumlConstructMethod {
 	string name;
 	DumlConstructName returnType;
 	DumlConstructField[] arguments;
+	string[] argStorageClasses;
 }

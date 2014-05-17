@@ -1,6 +1,6 @@
 ﻿module duml.handler;
 import duml.defs;
-import std.traits : moduleName, BaseTypeTuple, isAbstractClass, FieldTypeTuple, isSomeFunction, ReturnType, isBasicType, isArray, isAssociativeArray, ParameterIdentifierTuple, ParameterTypeTuple, fullyQualifiedName, KeyType, ValueType, PointerTarget, isPointer;
+import std.traits;
 
 pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface)) {
 	DumlConstruct ret;
@@ -31,15 +31,19 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 				// method
 				DumlConstructMethod method;
 				method.name = m;
+				alias SCT = ParameterStorageClassTuple!(mixin("t." ~ m));
+				
 				static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
 					alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
 					
 					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
 						method.arguments ~= grabField!(v, T, names[i])(ret);
+						method.argStorageClasses ~= getSCValue(SCT[i]);
 					}
 				} else {
 					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
-						method.arguments ~= grabField!(v, T, "")(ret);
+						method.arguments ~= grabField!(v, T, "...")(ret);
+						method.argStorageClasses ~= getSCValue(SCT[i]);
 					}
 				}
 				
@@ -54,6 +58,24 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 	}
 	
 	//...
+	
+	return ret;
+}
+
+pure string getSCValue(ubyte v) {
+	string ret;
+	
+	if ((v & ParameterStorageClass.scope_) == ParameterStorageClass.scope_)
+		ret ~= "scope ";
+	if ((v & ParameterStorageClass.out_) == ParameterStorageClass.out_)
+		ret ~= "out ";
+	if ((v & ParameterStorageClass.ref_) == ParameterStorageClass.ref_)
+		ret ~= "ref ";
+	if ((v & ParameterStorageClass.lazy_) == ParameterStorageClass.lazy_)
+		ret ~= "lazy ";
+	
+	if (ret.length == 0)
+		ret = "in ";
 	
 	return ret;
 }
