@@ -6,6 +6,8 @@ __Things I'd like to have implemented:__
 - Alias this displaying
 - Structs and unions
 - shared/inout/const/immutable support
+- Accessiblity
+- Notes
 
 __Example images:__
 
