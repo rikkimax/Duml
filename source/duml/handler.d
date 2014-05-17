@@ -31,10 +31,16 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 				// method
 				DumlConstructMethod method;
 				method.name = m;
-				alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
-				
-				foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
-					method.arguments ~= grabField!(v, T, names[i])(ret);
+				static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
+					alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
+					
+					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+						method.arguments ~= grabField!(v, T, names[i])(ret);
+					}
+				} else {
+					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+						method.arguments ~= grabField!(v, T, "")(ret);
+					}
 				}
 				
 				static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
