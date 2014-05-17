@@ -52,4 +52,7 @@ class T5_1 {
 
 class T5 {
 	T5_1[string] values;
+	
+	void myfunc(void* v){}
+	void* myfunc2(){return null;}
 }
