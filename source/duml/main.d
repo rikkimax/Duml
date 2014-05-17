@@ -3,7 +3,7 @@ import duml.defs;
 
 void main() {
 	registerType!T1;
-	registerType!(T2, T3, T4);
+	registerType!(T2, T3, T4, T5);
 	version(Windows) {
 		outputToFile("umloutput", "java", "winplantuml/plantuml.jar", "winplantuml/graphviz/bin/dot.exe");
 	} else {
@@ -44,4 +44,12 @@ class T4 {
 	void myfunc(){}
 	int myfunc2(){return 0;}
 	void myfunc3(int a){}
+}
+
+class T5_1 {
+	
+}
+
+class T5 {
+	T5_1[string] values;
 }

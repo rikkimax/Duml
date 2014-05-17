@@ -8,15 +8,17 @@ private {
 void registerType(T...)() {
 	import std.traits : fullyQualifiedName, BaseTypeTuple;
 	foreach(U; T) {
-		if (fullyQualifiedName!U !in definitions) {
-			definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
-			foreach(V; BaseTypeTuple!U) {
-				version(DumlIgnoreObject) {
-					static if (!is(V == Object)) {
+		static if (is(U == class)) {
+			if (fullyQualifiedName!U !in definitions) {
+				definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
+				foreach(V; BaseTypeTuple!U) {
+					version(DumlIgnoreObject) {
+						static if (!is(V == Object)) {
+							registerType!V;
+						}
+					} else {
 						registerType!V;
 					}
-				} else {
-					registerType!V;
 				}
 			}
 		}
@@ -52,16 +54,21 @@ namespace " ~ v.name.ofModule ~ " {
 		ret ~= """
 	}
 """;
+		foreach(refc; v.referencedClasses) {
+			ret ~= "\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
+		}
+		
+		
 		if (v.extends.ofClass != "") {
-			ret ~= v.name.fullyQuallified ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n";
+			ret ~= "\n    " ~ v.name.fullyQuallified ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n";
 			version(DumlIgnoreObject) {
 			} else {
-				ret ~= (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object";
+				ret ~= "    " ~ (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object";
 			}
 		}
 		foreach(i; v.inheritsFrom) {
 			ret ~= """
-				"  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
+	"  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
 		}
 		
 		ret ~= "\n}\n";
@@ -94,6 +101,7 @@ struct DumlConstruct {
 	
 	DumlConstructField[] fields;
 	DumlConstructMethod[] methods;
+	DumlConstructName[string] referencedClasses;
 }
 
 struct DumlConstructName {
