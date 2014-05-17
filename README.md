@@ -8,6 +8,7 @@ __Things I'd like to have implemented:__
 - shared/inout/const/immutable support
 - Accessiblity
 - Notes
+- Output ranges for outputPlantUML instead of straight string (possibly another function for getting it raw?)
 
 __Example images:__
 
