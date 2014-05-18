@@ -3,9 +3,7 @@ Duml produces [PlantUML](http://plantuml.com/) descriptors based upon classes fr
 You can disable Object classes being displayed by adding the version DumlIgnoreObject.
 
 __Things I'd like to have implemented:__
-- Alias this displaying
 - Structs and unions
-- shared/inout/const/immutable support
 - Accessiblity
 - Notes
 - Output ranges for outputPlantUML instead of straight string (possibly another function for getting it raw?)
