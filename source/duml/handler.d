@@ -57,6 +57,12 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 		}
 	}
 	
+	foreach(a; __traits(getAliasThis, T)) {
+		alias U = typeof(__traits(getMember, t, a));
+		ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, U.stringof, fullyQualifiedName!U);
+		ret.callerClasses ~= &registerType!U;
+	}
+	
 	//...
 	
 	return ret;

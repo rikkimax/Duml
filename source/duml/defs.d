@@ -35,16 +35,16 @@ string outputPlantUML() {
 	foreach(k, v; definitions) {
 		ret ~= """
 namespace " ~ v.name.ofModule ~ " {
-	class " ~ v.name.ofClass ~ " {";
+    class " ~ v.name.ofClass ~ " {";
 		
 		foreach(field; v.fields) {
 			ret ~= """
-	    " ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified);
+        " ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified);
 		}
 		
 		foreach(method; v.methods) {
 			ret ~= """
-	    " ~ method.name ~ "(";
+        " ~ method.name ~ "(";
 			
 			foreach(i, arg; method.arguments) {
 				ret ~= method.argStorageClasses[i] ~ arg.name ~ " : " ~ (v.name.ofModule == arg.type.ofModule ? arg.type.ofClass : arg.type.fullyQuallified) ~ ", ";
@@ -57,11 +57,16 @@ namespace " ~ v.name.ofModule ~ " {
 		}
 		
 		ret ~= """
-	}
+    }
 """;
 		
-		foreach(refc; v.referencedClasses) {
-			ret ~= "\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
+		foreach(k2, refc; v.referencedClasses) {
+			if (k2 !in v.hasAliasedClasses)
+				ret ~= "\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
+		}
+		
+		foreach(refc; v.hasAliasedClasses) {
+			ret ~= "\n    " ~ v.name.ofClass ~ " o--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
 		}
 		
 		if (v.extends.ofClass != "") {
@@ -74,7 +79,7 @@ namespace " ~ v.name.ofModule ~ " {
 		
 		foreach(i; v.inheritsFrom) {
 			ret ~= """
-	"  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
+    "  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
 		}
 		
 		if (ret[$-1] != '\n')
@@ -83,7 +88,7 @@ namespace " ~ v.name.ofModule ~ " {
 		ret ~= "}\n";
 	}
 	
-	ret ~= "\n@enduml\n";	
+	ret ~= "\n@enduml\n";    
 	return ret;
 }
 
@@ -111,6 +116,7 @@ struct DumlConstruct {
 	DumlConstructField[] fields;
 	DumlConstructMethod[] methods;
 	DumlConstructName[string] referencedClasses;
+	DumlConstructName[string] hasAliasedClasses;
 	
 	void function()[] callerClasses;
 }
