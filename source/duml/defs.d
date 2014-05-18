@@ -24,6 +24,14 @@ void registerType(T...)() {
 					func();
 				}
 			}
+		} else static if (is(U == struct) || is(U == union)) {
+			if (fullyQualifiedName!U !in definitions) {
+				definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
+				
+				foreach(func; definitions[fullyQualifiedName!U].callerClasses) {
+					func();
+				}
+			}
 		}
 	}
 }

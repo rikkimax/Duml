@@ -5,8 +5,6 @@ import std.traits;
 pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface)) {
 	DumlConstruct ret;
 	
-	ret.name = DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T);
-	
 	foreach(i, iUsed; BaseTypeTuple!T) {
 		static if (!is(iUsed == Object)) {
 			static if (isAbstractClass!iUsed) {
@@ -21,6 +19,22 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 	} else static if (!is(T == Object)) {
 		ret.inheritsFrom ~= DumlConstructName("object", "Object", fullyQualifiedName!Object);
 	}
+	
+	handleRegistrationOfTypeBase!T(ret);
+	
+	return ret;
+}
+
+pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == struct) || is(T == union)) {
+	DumlConstruct ret;
+	
+	handleRegistrationOfTypeBase!T(ret);
+	
+	return ret;
+}
+
+pure void handleRegistrationOfTypeBase(T, T t = T.init)(ref DumlConstruct ret) if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface) || is(T == struct) || is(T == union)) {
+	ret.name = DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T);
 	
 	foreach(m; __traits(allMembers, T)) {
 		static if (isUsable!(T, m) && implementedName!(T, m)) {
@@ -62,10 +76,6 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 		ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, U.stringof, fullyQualifiedName!U);
 		ret.callerClasses ~= &registerType!U;
 	}
-	
-	//...
-	
-	return ret;
 }
 
 pure string getSCValue(ubyte v) {
@@ -110,7 +120,7 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
 					static if (!is(U == T)) {
 						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-						data.callerClasses ~= &registerType!U;
+						data.callerClasses ~= &registerType!T;
 					}
 				}
 			} else static if (isArray!(T)) {
@@ -121,7 +131,7 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface) || is(T == interface)) {
 					static if (!is(U == T)) {
 						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-						data.callerClasses ~= &registerType!U;
+						data.callerClasses ~= &registerType!T;
 					}
 				}
 			} else static if (isAssociativeArray!(T)) {
@@ -149,7 +159,7 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
 					static if (!is(U == T)) {
 						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-						data.callerClasses ~= &registerType!U;
+						data.callerClasses ~= &registerType!T;
 					}
 				}
 			}
@@ -191,5 +201,5 @@ pure T newValueOfType(T)() {
 }
 
 pure bool isAnObjectType(T)() {
-	return is(T : Object) || is(T == struct);
+	return is(T : Object) || is(T == struct) || is(T == union);
 }

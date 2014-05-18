@@ -3,7 +3,8 @@ import duml.defs;
 
 void main() {
 	registerType!T1;
-	registerType!(T2, T3, T4, T5, T6, T7);
+	registerType!(T2, T3, T4, T5, T6, T7, T8, T9);
+	registerType!(S1, S2);
 	version(Windows) {
 		outputToFile("umloutput", "java", "winplantuml/plantuml.jar", "winplantuml/graphviz/bin/dot.exe");
 	} else {
@@ -68,4 +69,29 @@ class T7_1 {
 class T7 {
 	T7_1 v;
 	alias v this;
+}
+
+shared class T8 {
+	ubyte v;
+}
+
+class T9 {
+	shared ubyte v;
+}
+
+struct S1 {
+	ubyte x;
+}
+
+struct S2_1 {
+	ubyte x;
+}
+
+class S2_C2 {
+	ubyte y;
+}
+
+struct S2 {
+	S2_1 v;
+	S2_C2 v2;
 }
