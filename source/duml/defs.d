@@ -1,5 +1,6 @@
 ﻿module duml.defs;
 import duml.handler;
+import std.range : isOutputRange;
 
 private {
 	DumlConstruct[string] definitions;
@@ -36,68 +37,78 @@ void registerType(T...)() {
 	}
 }
 
-string outputPlantUML() {
-	string ret;
-	ret ~= "@startuml\n";
+void outputPlantUML(ref string ret) {
+	import std.array : appender;
+	auto text = appender!string;
+	outputPlantUML(text);
+	ret = text.data;
+}
+
+void outputPlantUML(T)(T t) if (isOutputRange!(T, string)) {
+	t.put("@startuml\n");
 	
 	foreach(k, v; definitions) {
-		ret ~= """
+		t.put("""
 namespace " ~ v.name.ofModule ~ " {
-    class " ~ v.name.ofClass ~ " {";
+    class " ~ v.name.ofClass ~ " {");
 		
 		foreach(field; v.fields) {
-			ret ~= """
-        " ~ visibilityChar(field.protection) ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified);
+			t.put("""
+        " ~ visibilityChar(field.protection) ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified));
 		}
 		
 		foreach(method; v.methods) {
-			ret ~= """
-        " ~ visibilityChar(method.protection) ~ method.name ~ "(";
+			t.put("""
+        " ~ visibilityChar(method.protection) ~ method.name ~ "(");
 			
 			foreach(i, arg; method.arguments) {
-				ret ~= method.argStorageClasses[i] ~ arg.name ~ " : " ~ (v.name.ofModule == arg.type.ofModule ? arg.type.ofClass : arg.type.fullyQuallified) ~ ", ";
+				t.put(method.argStorageClasses[i] ~ arg.name ~ " : " ~ (v.name.ofModule == arg.type.ofModule ? arg.type.ofClass : arg.type.fullyQuallified));
+				if (i < method.arguments.length - 1)
+					t.put(", ");
 			}
 			
-			if (method.arguments.length > 0)
-				ret.length -= 2;
-			
-			ret ~= ") : " ~ (v.name.ofModule == method.returnType.ofModule ? method.returnType.ofClass : method.returnType.fullyQuallified);
+			t.put(") : " ~ (v.name.ofModule == method.returnType.ofModule ? method.returnType.ofClass : method.returnType.fullyQuallified));
 		}
 		
-		ret ~= """
+		t.put("""
     }
-""";
+""");
+		
+		bool appendNewLine;
 		
 		foreach(k2, refc; v.referencedClasses) {
+			appendNewLine = true;
 			if (k2 !in v.hasAliasedClasses)
-				ret ~= "\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
+				t.put("\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified));
 		}
 		
 		foreach(refc; v.hasAliasedClasses) {
-			ret ~= "\n    " ~ v.name.ofClass ~ " o--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified);
+			appendNewLine = true;
+			t.put("\n    " ~ v.name.ofClass ~ " o--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified));
 		}
 		
 		if (v.extends.ofClass != "") {
-			ret ~= "\n    " ~ v.name.fullyQuallified ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n";
+			appendNewLine = true;
+			t.put("\n    " ~ v.name.fullyQuallified ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n");
 			version(DumlIgnoreObject) {
 			} else {
-				ret ~= "    " ~ (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object";
+				t.put("    " ~ (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object");
 			}
 		}
 		
 		foreach(i; v.inheritsFrom) {
-			ret ~= """
-    "  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified);
+			appendNewLine = true;
+			t.put("""
+    "  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified));
 		}
 		
-		if (ret[$-1] != '\n')
-			ret ~= "\n";
+		if (appendNewLine)
+			t.put("\n");
 		
-		ret ~= "}\n";
+		t.put("}\n");
 	}
 	
-	ret ~= "\n@enduml\n";    
-	return ret;
+	t.put("\n@enduml\n");
 }
 
 void outputToFile(string directory="umloutput", string javaExecLocation="java", string plantUmlLocation="plantuml.jar", string graphizDotLocation=null) {
@@ -111,7 +122,10 @@ void outputToFile(string directory="umloutput", string javaExecLocation="java", 
 	if (graphizDotLocation is null || environment.get("GRAPHVIZ_DOT") is null)
 		env["GRAPHVIZ_DOT"] = graphizDotLocation;
 	
-	write(buildPath(directory, "input.plantuml"), outputPlantUML());
+	string text;
+	outputPlantUML(text);
+	
+	write(buildPath(directory, "input.plantuml"), text);
 	execute([javaExecLocation, "-jar", plantUmlLocation, buildPath(directory, "input.plantuml")], env);
 	rename(buildPath(directory, "input.png"), buildPath(directory, "output.png"));
 }
