@@ -2,6 +2,8 @@ Duml produces [PlantUML](http://plantuml.com/) descriptors based upon classes fr
 
 You can disable Object classes being displayed by adding the version DumlIgnoreObject.
 
+[![Build Status](http://1.vps.cattermole.co.nz/jenkins/buildStatus/icon?job=duml)](http://1.vps.cattermole.co.nz/jenkins/job/duml/)
+
 __Things I'd like to have implemented:__
 - Protection of fields
 - Attributes of methods
