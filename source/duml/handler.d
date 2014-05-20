@@ -1,6 +1,7 @@
 ﻿module duml.handler;
 import duml.defs;
 import std.traits;
+import std.string : toLower, indexOf;
 
 pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface)) {
 	DumlConstruct ret;
@@ -165,6 +166,8 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 			}
 		}
 	}
+	ret.type.ofClass = ret.type.ofClass.replace("(", " ").replace(")", " ");
+	ret.type.fullyQuallified = ret.type.fullyQuallified.replace("(", " ").replace(")", " ");
 	return ret;
 }
 
@@ -202,4 +205,30 @@ pure T newValueOfType(T)() {
 
 pure bool isAnObjectType(T)() {
 	return is(T : Object) || is(T == struct) || is(T == union);
+}
+
+pure string replace(string text, string oldText, string newText, bool caseSensitive = true, bool first = false) {
+	string ret;
+	string tempData;
+	bool stop;
+	foreach(char c; text) {
+		if (tempData.length > oldText.length && !stop) {
+			ret ~= tempData;
+			tempData = "";
+		}
+		if (((oldText[0 .. tempData.length] != tempData && caseSensitive) || (oldText[0 .. tempData.length].toLower() != tempData.toLower() && !caseSensitive)) && !stop) {
+			ret ~= tempData;
+			tempData = "";
+		}
+		tempData ~= c;
+		if (((tempData == oldText && caseSensitive) || (tempData.toLower() == oldText.toLower() && !caseSensitive)) && !stop) {
+			ret ~= newText;
+			tempData = "";
+			stop = first;
+		}
+	}
+	if (tempData != "") {
+		ret ~= tempData;	
+	}
+	return ret;
 }
