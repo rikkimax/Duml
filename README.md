@@ -5,9 +5,8 @@ You can disable Object classes being displayed by adding the version DumlIgnoreO
 [![Build Status](http://1.vps.cattermole.co.nz/jenkins/job/duml/badge/icon)](http://1.vps.cattermole.co.nz/jenkins/job/duml/)
 
 __Things I'd like to have implemented:__
-- Attributes of methods
+- Attributes of methods (failed to figure out how to do so nicely so won't do right now)
 - Notes
-- Output ranges for outputPlantUML instead of straight string (possibly another function for getting it raw?)
 
 __Example images:__
 
