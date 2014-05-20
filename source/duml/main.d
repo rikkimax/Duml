@@ -2,6 +2,7 @@
 import duml.defs;
 
 void main() {
+	registerType!(duml.main);
 	registerType!T1;
 	registerType!(T2, T3, T4, T5, T6, T7, T8, T9, T10);
 	registerType!(S1, S2);
@@ -13,6 +14,8 @@ void main() {
 		outputToFile("umloutput", "java", "plantuml.jar"); // don't assume dot location
 	}
 }
+
+int xMyValue;
 
 class T1 {
 	string prop1;

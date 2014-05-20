@@ -7,7 +7,7 @@ private {
 }
 
 void registerType(T...)() {
-	import std.traits : fullyQualifiedName, BaseTypeTuple;
+	import std.traits : fullyQualifiedName, BaseTypeTuple, moduleName;
 	foreach(U; T) {
 		static if (is(U == class)) {
 			if (fullyQualifiedName!U !in definitions) {
@@ -30,6 +30,15 @@ void registerType(T...)() {
 				definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
 				
 				foreach(func; definitions[fullyQualifiedName!U].callerClasses) {
+					func();
+				}
+			}
+		} else static if (U.stringof.length > 7 && U.stringof[0 .. 7] == "module " && __traits(compiles, {mixin("import " ~ moduleName!U ~ ";");})) {
+			enum ModName = moduleName!U ~ ".__MODULE__";
+			if (ModName !in definitions) {
+				definitions[ModName] = handleRegistrationOfType!(U);
+				
+				foreach(func; definitions[ModName].callerClasses) {
 					func();
 				}
 			}
@@ -89,7 +98,7 @@ namespace " ~ v.name.ofModule ~ " {
 		
 		if (v.extends.ofClass != "") {
 			appendNewLine = true;
-			t.put("\n    " ~ v.name.fullyQuallified ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n");
+			t.put("\n    " ~ v.name.fullyQuallified.replace("(", " ").replace(")", " ") ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n");
 			version(DumlIgnoreObject) {
 			} else {
 				t.put("    " ~ (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object");

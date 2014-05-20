@@ -3,11 +3,11 @@ import duml.defs;
 import std.traits;
 import std.string : toLower, indexOf;
 
-pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface)) {
+pure DumlConstruct handleRegistrationOfType(T)() if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface)) {
 	DumlConstruct ret;
 	
 	foreach(i, iUsed; BaseTypeTuple!T) {
-		static if (!is(iUsed == Object)) {
+		static if (!__traits(isSame, T, Object) && !__traits(isSame, iUsed, Object)) {
 			static if (isAbstractClass!iUsed) {
 				ret.extends = DumlConstructName(moduleName!iUsed, __traits(identifier, iUsed), fullyQualifiedName!iUsed);
 			} else {
@@ -17,16 +17,17 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == class
 	}
 	
 	version(DumlIgnoreObject) {
-	} else static if (!is(T == Object)) {
+	} else static if (!__traits(isSame, T, Object)) {
 		ret.inheritsFrom ~= DumlConstructName("object", "Object", fullyQualifiedName!Object);
 	}
 	
 	handleRegistrationOfTypeBase!T(ret);
+	ret.callerClasses ~= &registerType!(mixin(moduleName!T));
 	
 	return ret;
 }
 
-pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == struct) || is(T == union)) {
+pure DumlConstruct handleRegistrationOfType(T)() if (is(T == struct) || is(T == union)) {
 	DumlConstruct ret;
 	
 	handleRegistrationOfTypeBase!T(ret);
@@ -34,18 +35,86 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == struc
 	return ret;
 }
 
-pure void handleRegistrationOfTypeBase(T)(ref DumlConstruct ret) if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface) || is(T == struct) || is(T == union)) {
+pure bool isModule(alias U)() {
+	return U.stringof.length > 7 && U.stringof[0 .. 7] == "module " && __traits(compiles, {mixin("import " ~ moduleName!U ~ ";");});
+}
+
+DumlConstruct handleRegistrationOfType(alias T)() if (isModule!T) {
+	DumlConstruct ret;
+	ret.name = DumlConstructName(moduleName!T, "_MODULE_", moduleName!T ~ "._MODULE_");
+	mixin("import t = " ~ moduleName!T ~ ";");
+	
+	foreach(m; __traits(allMembers, t)) {
+		static if (m == "object") {
+		} else static if (__traits(compiles, typeof(mixin("t." ~ m)))) {			
+			static if (__traits(compiles, {mixin("typeof(t." ~ m ~ ") X;");})) {
+				class N {mixin("typeof(t." ~ m ~ ") X;");}
+				
+				static if (isUsable!(N, "X") && implementedName!(N, "X")) {
+					// field
+					DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), t, m)(ret);
+					field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+					ret.fields ~= field;
+				}
+			} else static if (__traits(compiles, typeof(mixin("t." ~ m))) && is(typeof(mixin("t." ~ m)) == function)) {
+				// function
+				DumlConstructMethod method;
+				method.name = m;
+				alias SCT = ParameterStorageClassTuple!(mixin("t." ~ m));
+				
+				static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
+					alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
+					
+					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+						method.arguments ~= grabField!(v, T, names[i])(ret);
+						method.argStorageClasses ~= getSCValue(SCT[i]);
+					}
+				} else {
+					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+						method.arguments ~= grabField!(v, T, "...")(ret);
+						method.argStorageClasses ~= getSCValue(SCT[i]);
+					}
+				}
+				
+				static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
+					method.returnType = DumlConstructName("", "void", "void");
+				} else {
+					method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
+				}
+				
+				method.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+				
+				ret.methods ~= method;
+			}
+		} else {
+			mixin("alias U = t." ~ m ~ ";");
+			static if (is(U == class) || is(U == struct) || is(U == union) || is(U == interface)) {
+				ret.callerClasses ~= &registerType!(U);
+			}
+		}
+	}
+	
+	return ret;
+}
+
+pure void handleRegistrationOfTypeBase(alias T)(ref DumlConstruct ret) {
 	ret.name = DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T);
-	T t = T.init;
+	
+	static if (__traits(compiles, {T t = T.init;})) {
+		T t = T.init;
+	} else static if (__traits(compiles, {T t = new T;})) {
+		T t = new T;
+	} else {
+	}
 	
 	foreach(m; __traits(allMembers, T)) {
-		static if (isUsable!(T, m) && implementedName!(T, m)) {
-			// field
-			DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
-			field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
-			ret.fields ~= field;
-		} else {
-			static if (__traits(compiles, typeof(mixin("t." ~ m))) && implementedName!(T, m)) {
+		static if (__traits(compiles, typeof(mixin("t." ~ m)))) {
+			static if (!isCallable!(mixin("t." ~ m))) {
+				// field
+				DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
+				field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+				ret.fields ~= field;
+			} else static if (is(typeof(mixin("t." ~ m)) == function) || is(typeof(mixin("t." ~ m)) == delegate)) {
 				// method
 				DumlConstructMethod method;
 				method.name = m;
@@ -80,7 +149,7 @@ pure void handleRegistrationOfTypeBase(T)(ref DumlConstruct ret) if (is(T == cla
 	
 	foreach(a; __traits(getAliasThis, T)) {
 		alias U = typeof(__traits(getMember, t, a));
-		ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, U.stringof, fullyQualifiedName!U);
+		ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, __traits(identifier, U), fullyQualifiedName!U);
 		ret.callerClasses ~= &registerType!U;
 	}
 }
@@ -111,13 +180,17 @@ pure bool implementedName(T, string n)() {
 	return false;
 }
 
-pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlConstruct data) {
+pure DumlConstructField grabField(T, alias U, string m, bool isPtr=false)(ref DumlConstruct data) {
 	DumlConstructField ret;
 	static if (T.stringof != typeof(null).stringof) {
-		static if (is(T == void)) {
+		static if (is(T : void)) {
 			ret = DumlConstructField(m, DumlConstructName("", "void" ~ (isPtr ? "*" : ""), "void" ~ (isPtr ? "*" : "")));
-		} else {
-			T t = T.init;
+		} else static if (__traits(compiles, {T t = T.init;}) || __traits(compiles, {T t = new T;})) {
+			static if (__traits(compiles, {T t = T.init;})) {
+				T t = T.init;
+			} else static if (__traits(compiles, {T t = new T;})) {
+				T t = new T;
+			}
 			
 			static if (isPointer!T) {
 				ret = grabField!(PointerTarget!T, U, m, true)(data);
@@ -132,7 +205,9 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 				}
 			} else static if (isArray!(T)) {
 				foreach(e; [t.init]) {
-					ret = DumlConstructField(m, DumlConstructName("", typeof(e).stringof ~ (isPtr ? "*" : ""), fullyQualifiedName!(typeof(e)) ~ (isPtr ? "*" : "")));
+					static if (__traits(compiles, fullyQualifiedName!(typeof(e)))) {
+						ret = DumlConstructField(m, DumlConstructName("", typeof(e).stringof ~ (isPtr ? "*" : ""), fullyQualifiedName!(typeof(e)) ~ (isPtr ? "*" : "")));
+					}
 				}
 				
 				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface) || is(T == interface)) {
@@ -160,10 +235,10 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 						data.callerClasses ~= &registerType!(ValueType!T);
 					}
 				}
-			} else {
-				ret = DumlConstructField(m, DumlConstructName(moduleName!(T), T.stringof, fullyQualifiedName!T));
+			} else static if (__traits(compiles, {string mname = moduleName!T; })) {
+				ret = DumlConstructField(m, DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T));
 				
-				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
+				static if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
 					static if (!is(U == T)) {
 						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
 						data.callerClasses ~= &registerType!T;
@@ -174,6 +249,7 @@ pure DumlConstructField grabField(T, U, string m, bool isPtr=false)(ref DumlCons
 	}
 	ret.type.ofClass = ret.type.ofClass.replace("(", " ").replace(")", " ");
 	ret.type.fullyQuallified = ret.type.fullyQuallified.replace("(", " ").replace(")", " ");
+	
 	return ret;
 }
 
