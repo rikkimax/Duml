@@ -102,13 +102,17 @@ namespace " ~ v.name.ofModule ~ " {
 
 void outputToFile(string directory="umloutput", string javaExecLocation="java", string plantUmlLocation="plantuml.jar", string graphizDotLocation=null) {
 	import std.file : write, rename, exists, mkdir;
-	import std.process : execute;
+	import std.process : execute, environment;
 	import std.path : buildPath;
 	
 	if (!exists(directory)) mkdir(directory);
 	
+	string[string] env;
+	if (graphizDotLocation is null || "GRAPHVIZ_DOT" !in environment)
+		env["GRAPHVIZ_DOT"] = graphizDotLocation;
+	
 	write(buildPath(directory, "input.plantuml"), outputPlantUML());
-	execute([javaExecLocation, "-jar", plantUmlLocation, buildPath(directory, "input.plantuml")], ["GRAPHVIZ_DOT" : graphizDotLocation]);
+	execute([javaExecLocation, "-jar", plantUmlLocation, buildPath(directory, "input.plantuml")], env);
 	rename(buildPath(directory, "input.png"), buildPath(directory, "output.png"));
 }
 

@@ -10,7 +10,7 @@ void main() {
 	} else {
 		// honestly I don't know how to use it here. As its just an example.
 		pragma(msg, "You may want to change the config in main.d for java/plantuml.jar/dot.exe for graphiz");
-		outputToFile("umloutput", "java", "plantuml.jar", "dot");
+		outputToFile("umloutput", "java", "plantuml.jar"); // don't assume dot location
 	}
 }
 
