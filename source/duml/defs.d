@@ -21,7 +21,7 @@ void registerType(T...)() {
 						registerType!V;
 					}
 				}
-				foreach(func; definitions[fullyQualifiedName!U].callerClasses) {
+				foreach(func; definitions[fullyQualifiedName!U].callerClasses.values) {
 					func();
 				}
 			}
@@ -29,7 +29,7 @@ void registerType(T...)() {
 			if (fullyQualifiedName!U !in definitions) {
 				definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
 				
-				foreach(func; definitions[fullyQualifiedName!U].callerClasses) {
+				foreach(func; definitions[fullyQualifiedName!U].callerClasses.values) {
 					func();
 				}
 			}
@@ -38,7 +38,7 @@ void registerType(T...)() {
 			if (ModName !in definitions) {
 				definitions[ModName] = handleRegistrationOfType!(U);
 				
-				foreach(func; definitions[ModName].callerClasses) {
+				foreach(func; definitions[ModName].callerClasses.values) {
 					func();
 				}
 			}
@@ -87,8 +87,15 @@ namespace " ~ v.name.ofModule ~ " {
 		
 		foreach(k2, refc; v.referencedClasses) {
 			appendNewLine = true;
-			if (k2 !in v.hasAliasedClasses)
-				t.put("\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified));
+			if (k2 !in v.hasAliasedClasses) {
+				bool got = false;
+				foreach(i; v.inheritsFrom) {
+					if (i.fullyQuallified == k2)
+						got = true;
+				}
+				if (!got)
+					t.put("\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified));
+			}
 		}
 		
 		foreach(refc; v.hasAliasedClasses) {
@@ -153,7 +160,7 @@ struct DumlConstruct {
 	DumlConstructName[string] referencedClasses;
 	DumlConstructName[string] hasAliasedClasses;
 	
-	void function()[] callerClasses;
+	void function()[string] callerClasses;
 }
 
 struct DumlConstructName {

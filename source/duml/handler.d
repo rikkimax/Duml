@@ -22,7 +22,7 @@ pure DumlConstruct handleRegistrationOfType(T)() if (is(T == class) || __traits(
 	}
 	
 	handleRegistrationOfTypeBase!T(ret);
-	ret.callerClasses ~= &registerType!(mixin(moduleName!T));
+	ret.callerClasses[fullyQualifiedName!T] = &registerType!(mixin(moduleName!T));
 	
 	return ret;
 }
@@ -89,7 +89,7 @@ DumlConstruct handleRegistrationOfType(alias T)() if (isModule!T) {
 		} else {
 			mixin("alias U = t." ~ m ~ ";");
 			static if (is(U == class) || is(U == struct) || is(U == union) || is(U == interface)) {
-				ret.callerClasses ~= &registerType!(U);
+				ret.callerClasses[fullyQualifiedName!U] = &registerType!(U);
 			}
 		}
 	}
@@ -109,40 +109,43 @@ pure void handleRegistrationOfTypeBase(alias T)(ref DumlConstruct ret) {
 	
 	foreach(m; __traits(allMembers, T)) {
 		static if (__traits(compiles, typeof(mixin("t." ~ m)))) {
-			static if (!isCallable!(mixin("t." ~ m))) {
+			static if (!isCallable!(mixin("t." ~ m)) && isUsable!(T, m)) {
 				// field
 				DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
 				field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
 				ret.fields ~= field;
 			} else static if (is(typeof(mixin("t." ~ m)) == function) || is(typeof(mixin("t." ~ m)) == delegate)) {
 				// method
-				DumlConstructMethod method;
-				method.name = m;
-				alias SCT = ParameterStorageClassTuple!(mixin("t." ~ m));
-				
-				static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
-					alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
+				static if (!__traits(hasMember, Object, m) || is(T == Object)) {
 					
-					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
-						method.arguments ~= grabField!(v, T, names[i])(ret);
-						method.argStorageClasses ~= getSCValue(SCT[i]);
+					DumlConstructMethod method;
+					method.name = m;
+					alias SCT = ParameterStorageClassTuple!(mixin("t." ~ m));
+					
+					static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
+						alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
+						
+						foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+							method.arguments ~= grabField!(v, T, names[i])(ret);
+							method.argStorageClasses ~= getSCValue(SCT[i]);
+						}
+					} else {
+						foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+							method.arguments ~= grabField!(v, T, "...")(ret);
+							method.argStorageClasses ~= getSCValue(SCT[i]);
+						}
 					}
-				} else {
-					foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
-						method.arguments ~= grabField!(v, T, "...")(ret);
-						method.argStorageClasses ~= getSCValue(SCT[i]);
+					
+					static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
+						method.returnType = DumlConstructName("", "void", "void");
+					} else {
+						method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
 					}
+					
+					method.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+					
+					ret.methods ~= method;
 				}
-				
-				static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
-					method.returnType = DumlConstructName("", "void", "void");
-				} else {
-					method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
-				}
-				
-				method.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
-				
-				ret.methods ~= method;
 			}
 		}
 	}
@@ -150,7 +153,7 @@ pure void handleRegistrationOfTypeBase(alias T)(ref DumlConstruct ret) {
 	foreach(a; __traits(getAliasThis, T)) {
 		alias U = typeof(__traits(getMember, t, a));
 		ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, __traits(identifier, U), fullyQualifiedName!U);
-		ret.callerClasses ~= &registerType!U;
+		ret.callerClasses[fullyQualifiedName!U] = &registerType!U;
 	}
 }
 
@@ -196,13 +199,6 @@ pure DumlConstructField grabField(T, alias U, string m, bool isPtr=false)(ref Du
 				ret = grabField!(PointerTarget!T, U, m, true)(data);
 			} else static if (isBasicType!(T)) {
 				ret = DumlConstructField(m, DumlConstructName("", T.stringof ~ (isPtr ? "*" : ""), fullyQualifiedName!T ~ (isPtr ? "*" : "")));
-				
-				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
-					static if (!is(U == T)) {
-						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-						data.callerClasses ~= &registerType!T;
-					}
-				}
 			} else static if (isArray!(T)) {
 				foreach(e; [t.init]) {
 					static if (__traits(compiles, fullyQualifiedName!(typeof(e)))) {
@@ -213,7 +209,8 @@ pure DumlConstructField grabField(T, alias U, string m, bool isPtr=false)(ref Du
 				if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface) || is(T == interface)) {
 					static if (!is(U == T)) {
 						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-						data.callerClasses ~= &registerType!T;
+						static if (__traits(compiles, fullyQualifiedName!T))
+							data.callerClasses[fullyQualifiedName!T] = &registerType!T;
 					}
 				}
 			} else static if (isAssociativeArray!(T)) {
@@ -226,22 +223,22 @@ pure DumlConstructField grabField(T, alias U, string m, bool isPtr=false)(ref Du
 				if (is(KeyType!T == class) || is(KeyType!T == struct) || is(KeyType!T == union) || is(KeyType!T == interface)) {
 					static if (!is(U == KeyType!T)) {
 						data.referencedClasses[key.type.fullyQuallified] = key.type;
-						data.callerClasses ~= &registerType!(KeyType!T);
+						data.callerClasses[fullyQualifiedName!(KeyType!T)] = &registerType!(KeyType!T);
 					}
 				}
 				if (is(ValueType!T == class) || is(ValueType!T == struct) || is(ValueType!T == union) || is(ValueType!T == interface)) {
 					static if (!is(U == ValueType!T)) {
 						data.referencedClasses[value.type.fullyQuallified] = value.type;
-						data.callerClasses ~= &registerType!(ValueType!T);
+						data.callerClasses[fullyQualifiedName!(ValueType!T)] = &registerType!(ValueType!T);
 					}
 				}
 			} else static if (__traits(compiles, {string mname = moduleName!T; })) {
 				ret = DumlConstructField(m, DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T));
 				
 				static if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
-					static if (!is(U == T)) {
+					static if (!is(U == T) && !__traits(isSame, T, U)) {
 						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
-						data.callerClasses ~= &registerType!T;
+						data.callerClasses[fullyQualifiedName!T] = &registerType!T;
 					}
 				}
 			}
