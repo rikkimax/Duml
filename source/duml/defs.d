@@ -108,7 +108,7 @@ void outputToFile(string directory="umloutput", string javaExecLocation="java", 
 	if (!exists(directory)) mkdir(directory);
 	
 	string[string] env;
-	if (graphizDotLocation is null || "GRAPHVIZ_DOT" !in environment)
+	if (graphizDotLocation is null || environment.get("GRAPHVIZ_DOT") is null)
 		env["GRAPHVIZ_DOT"] = graphizDotLocation;
 	
 	write(buildPath(directory, "input.plantuml"), outputPlantUML());
