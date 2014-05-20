@@ -34,13 +34,16 @@ pure DumlConstruct handleRegistrationOfType(T, T t = T.init)() if (is(T == struc
 	return ret;
 }
 
-pure void handleRegistrationOfTypeBase(T, T t = T.init)(ref DumlConstruct ret) if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface) || is(T == struct) || is(T == union)) {
+pure void handleRegistrationOfTypeBase(T)(ref DumlConstruct ret) if (is(T == class) || __traits(isAbstractClass, T) || is(T == interface) || is(T == struct) || is(T == union)) {
 	ret.name = DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T);
+	T t = T.init;
 	
 	foreach(m; __traits(allMembers, T)) {
 		static if (isUsable!(T, m) && implementedName!(T, m)) {
 			// field
-			ret.fields ~= grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
+			DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
+			field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+			ret.fields ~= field;
 		} else {
 			static if (__traits(compiles, typeof(mixin("t." ~ m))) && implementedName!(T, m)) {
 				// method
@@ -67,6 +70,9 @@ pure void handleRegistrationOfTypeBase(T, T t = T.init)(ref DumlConstruct ret) i
 				} else {
 					method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
 				}
+				
+				method.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+				
 				ret.methods ~= method;
 			}
 		}

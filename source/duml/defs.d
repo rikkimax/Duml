@@ -47,12 +47,12 @@ namespace " ~ v.name.ofModule ~ " {
 		
 		foreach(field; v.fields) {
 			ret ~= """
-        " ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified);
+        " ~ visibilityChar(field.protection) ~ field.name ~ " : " ~ (v.name.ofModule == field.type.ofModule ? field.type.ofClass : field.type.fullyQuallified);
 		}
 		
 		foreach(method; v.methods) {
 			ret ~= """
-        " ~ method.name ~ "(";
+        " ~ visibilityChar(method.protection) ~ method.name ~ "(";
 			
 			foreach(i, arg; method.arguments) {
 				ret ~= method.argStorageClasses[i] ~ arg.name ~ " : " ~ (v.name.ofModule == arg.type.ofModule ? arg.type.ofClass : arg.type.fullyQuallified) ~ ", ";
@@ -139,9 +139,18 @@ struct DumlConstructName {
 	string fullyQuallified;
 }
 
+enum DumlDefProtection {
+	Public = "public",
+	Private = "private",
+	Protected = "protected",
+	Export = "export",
+	Package = "package"
+}
+
 struct DumlConstructField {
 	string name;
 	DumlConstructName type;
+	DumlDefProtection protection;
 }
 
 struct DumlConstructMethod {
@@ -149,4 +158,22 @@ struct DumlConstructMethod {
 	DumlConstructName returnType;
 	DumlConstructField[] arguments;
 	string[] argStorageClasses;
+	
+	DumlDefProtection protection;
+}
+
+pure string visibilityChar(DumlDefProtection p) {
+	switch(p) {
+		case DumlDefProtection.Private:
+			return "-";
+		case DumlDefProtection.Protected:
+			return "#";
+		case DumlDefProtection.Package:
+			return "~";
+			
+		case DumlDefProtection.Export:
+		case DumlDefProtection.Public:
+		default:
+			return "+";
+	}
 }
