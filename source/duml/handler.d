@@ -9,9 +9,9 @@ pure DumlConstruct handleRegistrationOfType(T)() if (is(T == class) || __traits(
 	foreach(i, iUsed; BaseTypeTuple!T) {
 		static if (!__traits(isSame, T, Object) && !__traits(isSame, iUsed, Object)) {
 			static if (isAbstractClass!iUsed) {
-				ret.extends = DumlConstructName(moduleName!iUsed, __traits(identifier, iUsed), fullyQualifiedName!iUsed);
+				ret.extends = DumlConstructName(moduleName!iUsed, __traits(identifier, iUsed), fullyQualifiedName!((cast()iUsed)));
 			} else {
-				ret.inheritsFrom ~= DumlConstructName(moduleName!iUsed, __traits(identifier, iUsed), fullyQualifiedName!iUsed);
+				ret.inheritsFrom ~= DumlConstructName(moduleName!iUsed, __traits(identifier, iUsed), fullyQualifiedName!((cast()iUsed)));
 			}
 		}
 	}
@@ -22,7 +22,8 @@ pure DumlConstruct handleRegistrationOfType(T)() if (is(T == class) || __traits(
 	}
 	
 	handleRegistrationOfTypeBase!T(ret);
-	ret.callerClasses[fullyQualifiedName!T] = &registerType!(mixin(moduleName!T));
+	static if (__traits(compiles, mixin(moduleName!T)))
+		ret.callerClasses[fullyQualifiedName!T] = &registerType!(mixin(moduleName!T));
 	
 	return ret;
 }
@@ -48,9 +49,9 @@ DumlConstruct handleRegistrationOfType(alias T)() if (isModule!T) {
 		static if (m == "object") {
 		} else static if (__traits(compiles, typeof(mixin("t." ~ m)))) {			
 			static if (__traits(compiles, {mixin("typeof(t." ~ m ~ ") X;");})) {
-				class N {mixin("typeof(t." ~ m ~ ") X;");}
+				mixin("class N" ~ m ~ " {typeof(t." ~ m ~ ") X;}");
 				
-				static if (isUsable!(N, "X") && implementedName!(N, "X")) {
+				static if (isUsable!(mixin("N" ~ m), "X") && implementedName!(mixin("N" ~ m), "X")) {
 					// field
 					DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), t, m)(ret);
 					field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
@@ -87,9 +88,11 @@ DumlConstruct handleRegistrationOfType(alias T)() if (isModule!T) {
 				ret.methods ~= method;
 			}
 		} else {
-			mixin("alias U = t." ~ m ~ ";");
-			static if (is(U == class) || is(U == struct) || is(U == union) || is(U == interface)) {
-				ret.callerClasses[fullyQualifiedName!U] = &registerType!(U);
+			static if (__traits(compiles, mixin("t." ~ m))) {
+				mixin("alias U = t." ~ m ~ ";");
+				static if (is(U == class) || is(U == struct) || is(U == union) || is(U == interface)) {
+					ret.callerClasses[fullyQualifiedName!U] = &registerType!(U);
+				}
 			}
 		}
 	}
@@ -98,62 +101,61 @@ DumlConstruct handleRegistrationOfType(alias T)() if (isModule!T) {
 }
 
 pure void handleRegistrationOfTypeBase(alias T)(ref DumlConstruct ret) {
-	ret.name = DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T);
+	ret.name = DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!(cast()T));
 	
-	static if (__traits(compiles, {T t = T.init;})) {
-		T t = T.init;
-	} else static if (__traits(compiles, {T t = new T;})) {
-		T t = new T;
-	} else {
-	}
-	
-	foreach(m; __traits(allMembers, T)) {
-		static if (__traits(compiles, typeof(mixin("t." ~ m)))) {
-			static if (!isCallable!(mixin("t." ~ m)) && isUsable!(T, m)) {
-				// field
-				DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
-				field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
-				ret.fields ~= field;
-			} else static if (is(typeof(mixin("t." ~ m)) == function) || is(typeof(mixin("t." ~ m)) == delegate)) {
-				// method
-				static if (!__traits(hasMember, Object, m) || is(T == Object)) {
-					
-					DumlConstructMethod method;
-					method.name = m;
-					alias SCT = ParameterStorageClassTuple!(mixin("t." ~ m));
-					
-					static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
-						alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
-						
-						foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
-							method.arguments ~= grabField!(v, T, names[i])(ret);
-							method.argStorageClasses ~= getSCValue(SCT[i]);
-						}
-					} else {
-						foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
-							method.arguments ~= grabField!(v, T, "...")(ret);
-							method.argStorageClasses ~= getSCValue(SCT[i]);
+	static if (__traits(compiles, {enum T t = newValueOfType!T;})) {
+		enum T t = newValueOfType!T;
+		static if (__traits(compiles, mixin("t." ~ m))) {
+			
+			foreach(m; __traits(allMembers, T)) {
+				static if (__traits(compiles, typeof(mixin("t." ~ m)))) {
+					static if (isUsable!(T, m) && !isCallable!(mixin("t." ~ m))) {
+						// field
+						DumlConstructField field = grabField!(typeof(mixin("t." ~ m)), T, m)(ret);
+						field.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+						ret.fields ~= field;
+					} else static if (is(typeof(mixin("t." ~ m)) == function) || is(typeof(mixin("t." ~ m)) == delegate)) {
+						// method
+						static if (!__traits(hasMember, Object, m) || is(T == Object)) {
+							
+							DumlConstructMethod method;
+							method.name = m;
+							alias SCT = ParameterStorageClassTuple!(mixin("t." ~ m));
+							
+							static if (__traits(compiles, ParameterIdentifierTuple!(mixin("t." ~ m)))) {
+								alias names = ParameterIdentifierTuple!(mixin("t." ~ m));
+								
+								foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+									method.arguments ~= grabField!(v, T, names[i])(ret);
+									method.argStorageClasses ~= getSCValue(SCT[i]);
+								}
+							} else {
+								foreach(i, v; ParameterTypeTuple!(typeof(mixin("t." ~ m)))) {
+									method.arguments ~= grabField!(v, T, "...")(ret);
+									method.argStorageClasses ~= getSCValue(SCT[i]);
+								}
+							}
+							
+							static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
+								method.returnType = DumlConstructName("", "void", "void");
+							} else {
+								method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
+							}
+							
+							method.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
+							
+							ret.methods ~= method;
 						}
 					}
-					
-					static if (is(ReturnType!(typeof(mixin("t." ~ m))) == void)) {
-						method.returnType = DumlConstructName("", "void", "void");
-					} else {
-						method.returnType = grabField!(ReturnType!(typeof(mixin("t." ~ m))), T, "")(ret).type;
-					}
-					
-					method.protection = cast(DumlDefProtection)__traits(getProtection, mixin("t." ~ m));
-					
-					ret.methods ~= method;
 				}
 			}
+			
+			foreach(a; __traits(getAliasThis, T)) {
+				alias U = typeof(__traits(getMember, t, a));
+				ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, __traits(identifier, U), fullyQualifiedName!(cast()U));
+				ret.callerClasses[fullyQualifiedName!U] = &registerType!U;
+			}
 		}
-	}
-	
-	foreach(a; __traits(getAliasThis, T)) {
-		alias U = typeof(__traits(getMember, t, a));
-		ret.hasAliasedClasses[fullyQualifiedName!U] = DumlConstructName(moduleName!U, __traits(identifier, U), fullyQualifiedName!U);
-		ret.callerClasses[fullyQualifiedName!U] = &registerType!U;
 	}
 }
 
@@ -233,11 +235,12 @@ pure DumlConstructField grabField(T, alias U, string m, bool isPtr=false)(ref Du
 					}
 				}
 			} else static if (__traits(compiles, {string mname = moduleName!T; })) {
-				ret = DumlConstructField(m, DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!T));
+				alias V = typeof(cast()t);
+				ret = DumlConstructField(m, DumlConstructName(moduleName!T, __traits(identifier, T), fullyQualifiedName!V));
 				
 				static if (is(T == class) || is(T == struct) || is(T == union) || is(T == interface)) {
 					static if (!is(U == T) && !__traits(isSame, T, U)) {
-						data.referencedClasses[ret.type.fullyQuallified] = ret.type;
+						//data.referencedClasses[ret.type.fullyQuallified] = ret.type;
 						data.callerClasses[fullyQualifiedName!T] = &registerType!T;
 					}
 				}
@@ -253,16 +256,24 @@ pure DumlConstructField grabField(T, alias U, string m, bool isPtr=false)(ref Du
 pure bool isUsable(C, string m)() {
 	C c = newValueOfType!C;
 	
-	static if (__traits(compiles, {auto value = typeof(mixin("c." ~ m)).init;}) || __traits(compiles, {bool isa = isArray!(typeof(mixin("c." ~ m)));})) {
-		static if (!__traits(hasMember, Object, m) &&
-		           !isSomeFunction!(mixin("c." ~ m)) &&
-		           !(m.length >= 2 && m[0 .. 2] == "op") &&
-		           !__traits(isVirtualMethod, mixin("c." ~ m))) {
-			
-			return true;
+	bool check(C, string m)() {
+		static if (__traits(compiles, {auto value = typeof(mixin("c." ~ m)).init;}) || __traits(compiles, {bool isa = isArray!(typeof(mixin("c." ~ m)));})) {
+			static if (!__traits(hasMember, Object, m) &&
+			           !isSomeFunction!(mixin("c." ~ m)) &&
+			           !(m.length >= 2 && m[0 .. 2] == "op") &&
+			           !__traits(isVirtualMethod, mixin("c." ~ m))) {
+				
+				return true;
+			} else {
+				return false;
+			}
 		} else {
 			return false;
 		}
+	}
+	
+	static if (__traits(compiles, check!(C, m))) {
+		return check!(C, m);
 	} else {
 		return false;
 	}

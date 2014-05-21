@@ -11,35 +11,68 @@ void registerType(T...)() {
 	foreach(U; T) {
 		static if (is(U == class)) {
 			if (fullyQualifiedName!U !in definitions) {
-				definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
-				foreach(V; BaseTypeTuple!U) {
-					version(DumlIgnoreObject) {
-						static if (!is(V == Object)) {
-							registerType!V;
-						}
-					} else {
-						registerType!V;
+				auto def = handleRegistrationOfType!U;
+				
+				bool ignore;
+				version(DumlIgnoreObject) {
+					if (def.name.ofModule == "object") {
+						ignore = true;
 					}
 				}
-				foreach(func; definitions[fullyQualifiedName!U].callerClasses.values) {
-					func();
+				
+				if (!ignore) {
+					definitions[fullyQualifiedName!U] = def;
+					foreach(V; BaseTypeTuple!U) {
+						version(DumlIgnoreObject) {
+							static if (!is(V == Object)) {
+								registerType!V;
+							}
+						} else {
+							registerType!V;
+						}
+					}
+					foreach(func; definitions[fullyQualifiedName!U].callerClasses.values) {
+						func();
+					}
 				}
 			}
 		} else static if (is(U == struct) || is(U == union)) {
 			if (fullyQualifiedName!U !in definitions) {
-				definitions[fullyQualifiedName!U] = handleRegistrationOfType!U;
+				auto def = handleRegistrationOfType!U;
 				
-				foreach(func; definitions[fullyQualifiedName!U].callerClasses.values) {
-					func();
+				bool ignore;
+				version(DumlIgnoreObject) {
+					if (def.name.ofModule == "object") {
+						ignore = true;
+					}
+				}
+				
+				if (!ignore) {
+					definitions[fullyQualifiedName!U] = def;
+					
+					foreach(func; definitions[fullyQualifiedName!U].callerClasses.values) {
+						func();
+					}
 				}
 			}
 		} else static if (U.stringof.length > 7 && U.stringof[0 .. 7] == "module " && __traits(compiles, {mixin("import " ~ moduleName!U ~ ";");})) {
 			enum ModName = moduleName!U ~ ".__MODULE__";
 			if (ModName !in definitions) {
-				definitions[ModName] = handleRegistrationOfType!(U);
+				auto def = handleRegistrationOfType!U;
 				
-				foreach(func; definitions[ModName].callerClasses.values) {
-					func();
+				bool ignore;
+				version(DumlIgnoreObject) {
+					if (def.name.ofModule == "object") {
+						ignore = true;
+					}
+				}
+				
+				if (!ignore) {
+					definitions[ModName] = def;
+					
+					foreach(func; definitions[ModName].callerClasses.values) {
+						func();
+					}
 				}
 			}
 		}
@@ -94,18 +127,18 @@ namespace " ~ v.name.ofModule ~ " {
 						got = true;
 				}
 				if (!got)
-					t.put("\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified));
+					t.put("\n    " ~ v.name.ofClass ~ " *--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified).replace("(", " ").replace(")", " "));
 			}
 		}
 		
 		foreach(refc; v.hasAliasedClasses) {
 			appendNewLine = true;
-			t.put("\n    " ~ v.name.ofClass ~ " o--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified));
+			t.put("\n    " ~ v.name.ofClass ~ " o--> " ~ (v.name.ofModule == refc.ofModule ? refc.ofClass : refc.fullyQuallified).replace("(", " ").replace(")", " "));
 		}
 		
 		if (v.extends.ofClass != "") {
 			appendNewLine = true;
-			t.put("\n    " ~ v.name.fullyQuallified.replace("(", " ").replace(")", " ") ~ " --|> abstract " ~ v.extends.fullyQuallified ~ "\n");
+			t.put("\n    " ~ v.name.fullyQuallified.replace("(", " ").replace(")", " ") ~ " --|> abstract " ~ v.extends.fullyQuallified.replace("(", " ").replace(")", " ") ~ "\n");
 			version(DumlIgnoreObject) {
 			} else {
 				t.put("    " ~ (v.name.ofModule == "object" ? v.extends.ofClass : v.extends.fullyQuallified) ~ " --|> interface object.Object");
@@ -115,7 +148,7 @@ namespace " ~ v.name.ofModule ~ " {
 		foreach(i; v.inheritsFrom) {
 			appendNewLine = true;
 			t.put("""
-    "  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified));
+    "  ~ (v.name.ofModule == i.ofModule ? v.name.ofClass : v.name.fullyQuallified) ~ " --|> interface " ~ (v.name.ofModule == i.ofModule ? i.ofClass : i.fullyQuallified).replace("(", " ").replace(")", " "));
 		}
 		
 		if (appendNewLine)
@@ -142,8 +175,8 @@ void outputToFile(string directory="umloutput", string javaExecLocation="java", 
 	outputPlantUML(text);
 	
 	write(buildPath(directory, "input.plantuml"), text);
-	execute([javaExecLocation, "-jar", plantUmlLocation, buildPath(directory, "input.plantuml")], env);
-	rename(buildPath(directory, "input.png"), buildPath(directory, "output.png"));
+	execute([javaExecLocation, "-jar", plantUmlLocation, buildPath(directory, "input.plantuml"), "-tsvg"], env);
+	rename(buildPath(directory, "input.svg"), buildPath(directory, "output.svg"));
 }
 
 /**
